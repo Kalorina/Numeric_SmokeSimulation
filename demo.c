@@ -42,6 +42,8 @@ static int win_x, win_y;
 static int mouse_down[3];
 static int omx, omy, mx, my;
 
+FILE* file;
+
 
 /*
   ----------------------------------------------------------------------
@@ -176,7 +178,17 @@ static void get_from_UI ( float * d, float * u, float * v )
 
 	for ( i=0 ; i<size ; i++ ) {
 		u[i] = v[i] = d[i] = 0.0f;
+
 	}
+
+	// for square shape diffusion in middle
+	/*for (i = N/3; i < N*2/3; i++) {
+
+		for (j = N / 3; j < N * 2 / 3; j++) {
+			d[IX(i, j)] = 1.0f;
+
+		}
+	}*/
 
 	if ( !mouse_down[0] && !mouse_down[2] ) return;
 
@@ -251,11 +263,28 @@ static void reshape_func ( int width, int height )
 	win_y = height;
 }
 
-static void idle_func ( void )
+// 
+static void idle_func ( void ) 
 {
 	get_from_UI ( dens_prev, u_prev, v_prev );
 	vel_step ( N, u, v, u_prev, v_prev, visc, dt );
 	dens_step ( N, dens, dens_prev, u, v, diff, dt );
+
+	// up-> initialication of setup
+	// here calculate actual mass and write it into to mass file, one line = macc per actual step
+
+	float mass = 0;
+	int i, j;
+
+	for (i = 0; i <= N; i++) {
+		for (j = 0; j <= N; j++) {
+			mass += dens[IX(i, j)];
+		}
+	}
+
+	//mass /= N * N; // devide N*N
+
+	fprintf(file, "%f \n", mass);
 
 	glutSetWindow ( win_id );
 	glutPostRedisplay ();
@@ -326,12 +355,13 @@ int main ( int argc, char ** argv )
 	}
 
 	if ( argc == 1 ) {
-		N = 64;
-		dt = 0.1f;
-		diff = 0.0f;
-		visc = 0.0f;
-		force = 5.0f;
-		source = 100.0f;
+		N = 64;			// too big and it slows down to much for simulation
+		dt = 0.1f;		// time step
+		diff = 0.001f;	// diffusion rate of the density
+		visc = 0.0f;	// viscosity of the fluid
+		force = 5.0f;	// scales the mouse movement that generate a force
+		source = 10.0f;	// amount of density that will be deposited
+
 		fprintf ( stderr, "Using defaults : N=%d dt=%g diff=%g visc=%g force = %g source=%g\n",
 			N, dt, diff, visc, force, source );
 	} else {
@@ -350,7 +380,7 @@ int main ( int argc, char ** argv )
 	printf ( "\t Clear the simulation by pressing the 'c' key\n" );
 	printf ( "\t Quit by pressing the 'q' key\n" );
 
-	dvel = 0;
+	dvel = 0;	// parameter for showing velocity = 1 or density = 0
 
 	if ( !allocate_data () ) exit ( 1 );
 	clear_data ();
@@ -359,7 +389,12 @@ int main ( int argc, char ** argv )
 	win_y = 512;
 	open_glut_window ();
 
-	glutMainLoop ();
+	// file -> global variable
+	file = fopen("mass.txt", "w");
+
+	glutMainLoop ();	// main code for simulation
+
+	fclose(file);
 
 	exit ( 0 );
 }
