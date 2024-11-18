@@ -2,6 +2,8 @@
 #define SWAP(x0,x) {float * tmp=x0;x0=x;x=tmp;}
 #define FOR_EACH_CELL for ( i=1 ; i<=N ; i++ ) { for ( j=1 ; j<=N ; j++ ) {
 #define END_FOR }}
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
 
 void add_source ( int N, float * x, float * s, float dt )
 {
@@ -29,7 +31,7 @@ void lin_solve ( int N, int b, float * x, float * x0, float a, float c )
 {
 	int i, j, k;
 
-	for ( k=0 ; k<20 ; k++ ) {
+	for ( k=0 ; k<2 ; k++ ) {
 		FOR_EACH_CELL
 			x[IX(i,j)] = (x0[IX(i,j)] + a*(x[IX(i-1,j)]+x[IX(i+1,j)]+x[IX(i,j-1)]+x[IX(i,j+1)]))/c;
 		END_FOR
@@ -49,15 +51,47 @@ void advect ( int N, int b, float * d, float * d0, float * u, float * v, float d
 	float x, y, s0, t0, s1, t1, dt0;
 
 	dt0 = dt*N;
-	FOR_EACH_CELL
-		x = i-dt0*u[IX(i,j)]; y = j-dt0*v[IX(i,j)];
-		if (x<0.5f) x=0.5f; if (x>N+0.5f) x=N+0.5f; i0=(int)x; i1=i0+1;
-		if (y<0.5f) y=0.5f; if (y>N+0.5f) y=N+0.5f; j0=(int)y; j1=j0+1;
-		s1 = x-i0; s0 = 1-s1; t1 = y-j0; t0 = 1-t1;
-		d[IX(i,j)] = s0*(t0*d0[IX(i0,j0)]+t1*d0[IX(i0,j1)])+
-					 s1*(t0*d0[IX(i1,j0)]+t1*d0[IX(i1,j1)]);
-	END_FOR
-	set_bnd ( N, b, d );
+	if (b != 11) 
+	{
+		FOR_EACH_CELL
+			x = i - dt0 * u[IX(i, j)]; y = j - dt0 * v[IX(i, j)];
+		if (x < 0.5f) x = 0.5f; if (x > N + 0.5f) x = N + 0.5f; i0 = (int)x; i1 = i0 + 1;
+		if (y < 0.5f) y = 0.5f; if (y > N + 0.5f) y = N + 0.5f; j0 = (int)y; j1 = j0 + 1;
+		s1 = x - i0; s0 = 1 - s1; t1 = y - j0; t0 = 1 - t1;
+		d[IX(i, j)] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)]) +
+			s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+		END_FOR
+	}
+	else
+	{
+		// kod
+
+		float  u_plusHalf, u_minHalf, v_plusHalf, v_minHalf;
+		float h = 1.0 / N;
+
+		FOR_EACH_CELL
+
+			u_plusHalf = 0.5f * (u[IX(i, j)] + u[IX(i + 1, j)]);
+		u_minHalf = 0.5f * (u[IX(i, j)] + u[IX(i - 1, j)]);
+
+		v_plusHalf = 0.5f * (u[IX(i, j)] + u[IX(i, j + 1)]);
+		v_minHalf = 0.5f * (u[IX(i, j)] + u[IX(i, j + 1)]);
+
+		d[IX(i, j)] = d0[IX(i, j)] - dt / h * (
+			MAX(u_plusHalf, 0) * d0[IX(i, j)] + 
+			MIN(u_plusHalf, 0) * d0[IX(i + 1, j)] - 
+			MAX(u_minHalf, 0) * d0[IX(i - 1, j)] - 
+			MIN(u_minHalf, 0) * d0[IX(i, j)] + 
+			MAX(v_plusHalf, 0) * d0[IX(i, j)] + 
+			MIN(v_plusHalf, 0) * d0[IX(i, j + 1)] - 
+			MAX(v_minHalf, 0) * d0[IX(i, j - 1)] - 
+			MIN(v_minHalf, 0) * d0[IX(i, j)]);
+
+		END_FOR
+	}
+	
+	if (b == 11) set_bnd ( N, 0, d );
+	else set_bnd(N, b, d);
 }
 
 void project ( int N, float * u, float * v, float * p, float * div )
@@ -83,7 +117,10 @@ void dens_step ( int N, float * x, float * x0, float * u, float * v, float diff,
 {
 	add_source ( N, x, x0, dt );
 	SWAP ( x0, x ); diffuse ( N, 0, x, x0, diff, dt );
-	SWAP ( x0, x ); advect ( N, 0, x, x0, u, v, dt );
+	//SWAP ( x0, x ); advect ( N, 0, x, x0, u, v, dt ); 
+	// 2. parameter v diffuse/advect => 0 -> pocitame hustotu 
+	// Pre advect sme pridali moznost b=11 
+	SWAP(x0, x); advect(N, 11, x, x0, u, v, dt);
 }
 
 void vel_step ( int N, float * u, float * v, float * u0, float * v0, float visc, float dt )
