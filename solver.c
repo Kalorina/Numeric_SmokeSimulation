@@ -67,7 +67,6 @@ void advect ( int N, int b, float * d, float * d0, float * u, float * v, float d
 		// kod
 
 		float  u_plusHalf, u_minHalf, v_plusHalf, v_minHalf;
-		float h = 1.0 / N;
 
 		FOR_EACH_CELL
 
@@ -75,9 +74,9 @@ void advect ( int N, int b, float * d, float * d0, float * u, float * v, float d
 		u_minHalf = 0.5f * (u[IX(i, j)] + u[IX(i - 1, j)]);
 
 		v_plusHalf = 0.5f * (u[IX(i, j)] + u[IX(i, j + 1)]);
-		v_minHalf = 0.5f * (u[IX(i, j)] + u[IX(i, j + 1)]);
+		v_minHalf = 0.5f * (u[IX(i, j)] + u[IX(i, j - 1)]);
 
-		d[IX(i, j)] = d0[IX(i, j)] - dt / h * (
+		d[IX(i, j)] = d0[IX(i, j)] - dt0 * (
 			MAX(u_plusHalf, 0) * d0[IX(i, j)] + 
 			MIN(u_plusHalf, 0) * d0[IX(i + 1, j)] - 
 			MAX(u_minHalf, 0) * d0[IX(i - 1, j)] - 
