@@ -12,15 +12,32 @@ void add_source ( int N, float * x, float * s, float dt )
 }
 
 void set_bnd ( int N, int b, float * x )
-{
+{	
+	// b -> ci advekcia alebo difuzia pre u alebo v
+	// b=1 pre u a b=2 pre vq
 	int i;
+	float d = 0.5;
 
 	for ( i=1 ; i<=N ; i++ ) {
-		x[IX(0  ,i)] = b==1 ? -x[IX(1,i)] : x[IX(1,i)];
-		x[IX(N+1,i)] = b==1 ? -x[IX(N,i)] : x[IX(N,i)];
-		x[IX(i,0  )] = b==2 ? -x[IX(i,1)] : x[IX(i,1)];
-		x[IX(i,N+1)] = b==2 ? -x[IX(i,N)] : x[IX(i,N)];
+		x[IX(0  ,i)] = b==1 ? -x[IX(1,i)] : x[IX(1,i)]; // lava hranica pre d=0 Dirichlet a Neumann OP
+		x[IX(N+1,i)] = b==1 ? -x[IX(N,i)] : x[IX(N,i)]; // prava hranica
+		x[IX(i,0  )] = b==2 ? -x[IX(i,1)] : x[IX(i,1)]; // dolna hranica 
+		x[IX(i,N+1)] = b==2 ? -x[IX(i,N)] : x[IX(i,N)]; // horna hranica 
 	}
+
+	for (i = 1; i <= N/2; i++) {
+		x[IX(0  , i)] = b == 1 ? 2*d-x[IX(1, i)] : x[IX(1, i)]; // dolna polovica lavej hranice +2d -> PRITOK
+		x[IX(N+1, i)] = b == 1 ? 2*d-x[IX(N, i)] : x[IX(N, i)]; // horna polovica pravej hranice +2d -> ODTOK
+	}
+
+	// Periodicke OP -> to co vychadza vojde naspat dnu ALE iba pre hustotu dymu b=0
+	if (b == 0) {
+		for (i = 1; i <= N / 2; i++) {
+			x[IX(0, i)] = x[IX(N + 1, i)];
+		}
+	}
+
+	// Body na rohoch = priemer
 	x[IX(0  ,0  )] = 0.5f*(x[IX(1,0  )]+x[IX(0  ,1)]);
 	x[IX(0  ,N+1)] = 0.5f*(x[IX(1,N+1)]+x[IX(0  ,N)]);
 	x[IX(N+1,0  )] = 0.5f*(x[IX(N,0  )]+x[IX(N+1,1)]);
@@ -31,7 +48,7 @@ void lin_solve ( int N, int b, float * x, float * x0, float a, float c )
 {
 	int i, j, k;
 
-	for ( k=0 ; k<2 ; k++ ) {
+	for ( k=0 ; k<20 ; k++ ) {
 		FOR_EACH_CELL
 			x[IX(i,j)] = (x0[IX(i,j)] + a*(x[IX(i-1,j)]+x[IX(i+1,j)]+x[IX(i,j-1)]+x[IX(i,j+1)]))/c;
 		END_FOR
@@ -97,39 +114,45 @@ void project ( int N, float * u, float * v, float * p, float * div )
 {
 	int i, j;
 
+	// I.
 	FOR_EACH_CELL
-		div[IX(i,j)] = -0.5f*(u[IX(i+1,j)]-u[IX(i-1,j)]+v[IX(i,j+1)]-v[IX(i,j-1)])/N;
+		div[IX(i,j)] = -0.5f*(u[IX(i+1,j)]-u[IX(i-1,j)]+v[IX(i,j+1)]-v[IX(i,j-1)])/N; // /N = *h -> h = 1/N
 		p[IX(i,j)] = 0;
 	END_FOR	
-	set_bnd ( N, 0, div ); set_bnd ( N, 0, p );
+	set_bnd ( N, 0, div ); set_bnd ( N, 0, p ); // hranice OP
 
+	// II.
 	lin_solve ( N, 0, p, div, 1, 4 );
 
+	// III.
 	FOR_EACH_CELL
-		u[IX(i,j)] -= 0.5f*N*(p[IX(i+1,j)]-p[IX(i-1,j)]);
-		v[IX(i,j)] -= 0.5f*N*(p[IX(i,j+1)]-p[IX(i,j-1)]);
+		u[IX(i,j)] -= 0.5f*N*(p[IX(i+1,j)]-p[IX(i-1,j)]); // - gradient rlaku cez centralnu diferenciu
+		v[IX(i,j)] -= 0.5f*N*(p[IX(i,j+1)]-p[IX(i,j-1)]); // - gradient rlaku cez centralnu diferenciu
 	END_FOR
-	set_bnd ( N, 1, u ); set_bnd ( N, 2, v );
+	set_bnd ( N, 1, u ); set_bnd ( N, 2, v ); // OP
 }
 
 void dens_step ( int N, float * x, float * x0, float * u, float * v, float diff, float dt )
 {
 	add_source ( N, x, x0, dt );
 	SWAP ( x0, x ); diffuse ( N, 0, x, x0, diff, dt );
-	//SWAP ( x0, x ); advect ( N, 0, x, x0, u, v, dt ); 
+	SWAP ( x0, x ); advect ( N, 0, x, x0, u, v, dt ); 
 	// 2. parameter v diffuse/advect => 0 -> pocitame hustotu 
 	// Pre advect sme pridali moznost b=11 
-	SWAP(x0, x); advect(N, 11, x, x0, u, v, dt);
+	// SWAP(x0, x); advect(N, 11, x, x0, u, v, dt);
 }
+
+// velocity step -> 
 
 void vel_step ( int N, float * u, float * v, float * u0, float * v0, float visc, float dt )
 {
-	add_source ( N, u, u0, dt ); add_source ( N, v, v0, dt );
-	SWAP ( u0, u ); diffuse ( N, 1, u, u0, visc, dt );
-	SWAP ( v0, v ); diffuse ( N, 2, v, v0, visc, dt );
-	project ( N, u, v, u0, v0 );
-	SWAP ( u0, u ); SWAP ( v0, v );
-	advect ( N, 1, u, u0, u0, v0, dt ); advect ( N, 2, v, v0, u0, v0, dt );
+	add_source ( N, u, u0, dt ); add_source ( N, v, v0, dt ); // zohladnia sa zdroje -> u,v su aktialnejsie
+	SWAP ( u0, u ); diffuse ( N, 1, u, u0, visc, dt ); // u=u0 a difuzia na u
+	SWAP ( v0, v ); diffuse ( N, 2, v, v0, visc, dt ); // v=v0 a difuzia na u
+	project ( N, u, v, u0, v0 ); 
+	SWAP ( u0, u ); SWAP ( v0, v ); // ulozia sa u,v do u0 a v0
+	advect ( N, 1, u, u0, u0, v0, dt );  // advekcia na u
+	advect ( N, 2, v, v0, u0, v0, dt );  // advekcia na v
 	project ( N, u, v, u0, v0 );
 }
 

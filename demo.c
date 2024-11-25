@@ -358,7 +358,7 @@ int main ( int argc, char ** argv )
 	if ( argc == 1 ) {
 		N = 64;			// too big and it slows down to much for simulation
 		dt = 0.05f;		// time step
-		diff = 0.00f;	// diffusion rate of the density
+		diff = 0.0f;	// diffusion rate of the density
 		visc = 0.0f;	// viscosity of the fluid
 		force = 5.0f;	// scales the mouse movement that generate a force
 		source = 10.0f;	// amount of density that will be deposited
